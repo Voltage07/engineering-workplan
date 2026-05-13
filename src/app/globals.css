@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary:       #1a4f8a;
+  --color-primary-dark:  #143d6b;
+  --color-primary-light: #2563b0;
+  --color-accent:        #f59e0b;
+  --color-bg:            #f0f2f5;
+  --color-surface:       #ffffff;
+  --color-surface-2:     #f7f8fa;
+  --color-text:          #111827;
+  --color-text-muted:    #6b7280;
+  --color-text-faint:    #9ca3af;
+  --color-border:        #e5e7eb;
+  --sidebar-bg:          #0f172a;
+  --sidebar-text:        #94a3b8;
+  --sidebar-text-hover:  #f1f5f9;
+  --sidebar-active:      #1e293b;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+* { box-sizing: border-box; }
+
+html {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: #f7f8fa; }
+::-webkit-scrollbar-thumb  { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-gray-100 shadow-sm p-6;
+  }
+
+  .data-table {
+    @apply w-full border-collapse;
+  }
+  .data-table th {
+    @apply text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 bg-gray-50 border-b border-gray-100;
+  }
+  .data-table td {
+    @apply px-4 py-3 text-sm border-b border-gray-50;
+  }
+  .data-table tr:last-child td { @apply border-b-0; }
+  .data-table tr:hover td      { @apply bg-gray-50/50; }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-pending     { @apply bg-gray-100   text-gray-700;   }
+  .badge-ongoing     { @apply bg-blue-100   text-blue-700;   }
+  .badge-completed   { @apply bg-green-100  text-green-700;  }
+  .badge-paused      { @apply bg-yellow-100 text-yellow-700; }
+  .badge-cancelled   { @apply bg-red-100    text-red-700;    }
+  .badge-in_progress { @apply bg-purple-100 text-purple-700; }
+
+  .priority-low    { @apply bg-gray-100   text-gray-600;   }
+  .priority-normal { @apply bg-blue-50    text-blue-600;   }
+  .priority-high   { @apply bg-orange-100 text-orange-700; }
+  .priority-urgent { @apply bg-red-100    text-red-700;    }
+}
