@@ -2,13 +2,8 @@
 // ==========================================================
 // src/components/layout/Sidebar.tsx
 // ==========================================================
-//
-// The sidebar navigation that appears on every dashboard page.
-// It's a CLIENT COMPONENT because:
-//   - It uses usePathname() to highlight the active link
-//   - It needs state for mobile menu toggling
-//
-// Props: profile (the logged-in user's data)
+// Now accepts appName and orgName as props from the
+// dashboard layout (which fetches them server-side).
 // ==========================================================
 
 import Link from 'next/link'
@@ -18,15 +13,13 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Profile } from '@/types'
 
-// Define what nav items look like
 interface NavItem {
   label: string
   href: string
   icon: React.ReactNode
-  adminOnly?: boolean  // If true, only show to admins
+  adminOnly?: boolean
 }
 
-// All navigation links + their icons
 const NAV_ITEMS: NavItem[] = [
   {
     label: 'Dashboard',
@@ -97,12 +90,12 @@ const NAV_ITEMS: NavItem[] = [
 
 interface SidebarProps {
   profile: Profile | null
+  appName?: string    // fetched server-side from settings table
+  orgName?: string
 }
 
-export default function Sidebar({ profile }: SidebarProps) {
+export default function Sidebar({ profile, appName = 'Road WorkPlan', orgName = 'Eng. Co-ordinating Unit' }: SidebarProps) {
   const pathname = usePathname()
-  // usePathname() returns the current URL path, e.g. "/projects"
-
   const [mobileOpen, setMobileOpen] = useState(false)
   const router = useRouter()
 
@@ -116,7 +109,6 @@ export default function Sidebar({ profile }: SidebarProps) {
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
     return pathname.startsWith(href)
-    // startsWith catches /projects AND /projects/new etc.
   }
 
   const visibleItems = NAV_ITEMS.filter(item => {
@@ -127,7 +119,7 @@ export default function Sidebar({ profile }: SidebarProps) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
 
-      {/* Logo / App name */}
+      {/* Logo / App name — uses the dynamic appName prop */}
       <div className="px-6 py-5 border-b border-slate-700/50">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center flex-shrink-0">
@@ -135,9 +127,9 @@ export default function Sidebar({ profile }: SidebarProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
             </svg>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-white">Road WorkPlan</p>
-            <p className="text-xs text-slate-400">Eng. Co-ordinating Unit</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white truncate">{appName}</p>
+            <p className="text-xs text-slate-400 truncate">{orgName}</p>
           </div>
         </div>
       </div>
@@ -162,7 +154,6 @@ export default function Sidebar({ profile }: SidebarProps) {
           >
             {item.icon}
             {item.label}
-            {/* Show a crown badge next to Admin link */}
             {item.adminOnly && (
               <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">
                 Admin
@@ -175,7 +166,6 @@ export default function Sidebar({ profile }: SidebarProps) {
       {/* User profile + logout */}
       <div className="px-3 py-4 border-t border-slate-700/50">
         <div className="flex items-center gap-3 px-3 py-2 rounded-lg">
-          {/* Avatar — first letter of name */}
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
             <span className="text-xs font-semibold text-white">
               {profile?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
@@ -206,12 +196,12 @@ export default function Sidebar({ profile }: SidebarProps) {
 
   return (
     <>
-      {/* DESKTOP: Always visible fixed sidebar */}
+      {/* DESKTOP sidebar */}
       <aside className="hidden lg:flex w-64 flex-col bg-slate-900 border-r border-slate-700/50 flex-shrink-0">
         <SidebarContent />
       </aside>
 
-      {/* MOBILE: Hamburger button */}
+      {/* MOBILE hamburger */}
       <button
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-900 text-white"
         onClick={() => setMobileOpen(!mobileOpen)}
@@ -225,13 +215,10 @@ export default function Sidebar({ profile }: SidebarProps) {
         </svg>
       </button>
 
-      {/* MOBILE: Overlay + drawer */}
+      {/* MOBILE drawer */}
       {mobileOpen && (
         <>
-          <div
-            className="lg:hidden fixed inset-0 bg-black/60 z-40"
-            onClick={() => setMobileOpen(false)}
-          />
+          <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileOpen(false)} />
           <aside className="lg:hidden fixed left-0 top-0 h-full w-64 bg-slate-900 border-r border-slate-700/50 z-50 flex flex-col">
             <SidebarContent />
           </aside>

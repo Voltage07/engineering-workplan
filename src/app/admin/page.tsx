@@ -1,9 +1,9 @@
 'use client'
 // ==========================================================
-// src/app/admin/page.tsx  —  COMPLETE VERSION
+// src/app/admin/page.tsx
 // ==========================================================
-// Full CRUD: Create, Read (list), Update (edit modal), Delete
-// Three tabs: Projects | Work Plans | Tasks
+// Added a "Settings" tab where admin can edit the app name
+// and organisation name. Everything else unchanged.
 // ==========================================================
 
 import { useState, useEffect, useCallback } from 'react'
@@ -11,19 +11,19 @@ import { createClient } from '@/lib/supabase/client'
 import { createProject, updateProject, deleteProject } from '@/lib/actions/projects'
 import { createWorkPlan, updateWorkPlan, deleteWorkPlan } from '@/lib/actions/workplans'
 import { createTask, updateTask, deleteTask, updateTaskStatus } from '@/lib/actions/tasks'
+import { updateSetting } from '@/lib/actions/settings'
 import Modal from '@/components/ui/Modal'
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge'
 import type { Project, TaskStatus } from '@/types'
 
-type Tab = 'projects' | 'workplans' | 'tasks'
+type Tab = 'projects' | 'workplans' | 'tasks' | 'settings'
 
 const inp = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 bg-white"
 const lbl = "block text-xs font-medium text-gray-600 mb-1"
 
-// ── Toast notification ────────────────────────────────────
 function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
   return (
-    <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 animate-fade-in ${
+    <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 ${
       type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
     }`}>
       {type === 'success'
@@ -35,7 +35,6 @@ function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
   )
 }
 
-// ── Icon buttons ──────────────────────────────────────────
 const EditBtn = ({ onClick }: { onClick: () => void }) => (
   <button onClick={onClick} title="Edit"
     className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
@@ -54,8 +53,7 @@ const DelBtn = ({ onClick }: { onClick: () => void }) => (
   </button>
 )
 
-// ── Modal action buttons ───────────────────────────────────
-const ModalActions = ({ onCancel, saving, label = 'Save changes' }: { onCancel: () => void; saving: boolean; label?: string }) => (
+const ModalActions = ({ onCancel, saving }: { onCancel: () => void; saving: boolean }) => (
   <div className="flex gap-3 pt-3 border-t border-gray-100 mt-4">
     <button type="button" onClick={onCancel}
       className="flex-1 py-2.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
@@ -63,12 +61,11 @@ const ModalActions = ({ onCancel, saving, label = 'Save changes' }: { onCancel: 
     </button>
     <button disabled={saving}
       className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors">
-      {saving ? 'Saving...' : label}
+      {saving ? 'Saving...' : 'Save changes'}
     </button>
   </div>
 )
 
-// ════════════════════════════════════════════════════════════
 export default function AdminPage() {
   const [tab, setTab]             = useState<Tab>('projects')
   const [projects, setProjects]   = useState<Project[]>([])
@@ -76,6 +73,11 @@ export default function AdminPage() {
   const [tasks, setTasks]         = useState<any[]>([])
   const [saving, setSaving]       = useState(false)
   const [toast, setToast]         = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+
+  // Settings state
+  const [appName, setAppName]   = useState('')
+  const [orgName, setOrgName]   = useState('')
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   // Edit modal state
   const [editProject,  setEditProject]  = useState<Project | null>(null)
@@ -91,22 +93,28 @@ export default function AdminPage() {
   const [wForm, setWForm] = useState(emptyW)
   const [tForm, setTForm] = useState(emptyT)
 
-  // ── Data loader ───────────────────────────────────────────
   const load = useCallback(async () => {
     const sb = createClient()
-    const [{ data: p }, { data: w }, { data: t }] = await Promise.all([
+    const [{ data: p }, { data: w }, { data: t }, { data: s }] = await Promise.all([
       sb.from('projects').select('*').order('created_at', { ascending: false }),
       sb.from('workplans').select('*, project:projects(id,name)').order('created_at', { ascending: false }),
       sb.from('tasks').select('*, project:projects(id,name)').order('created_at', { ascending: false }),
+      sb.from('settings').select('key, value'),
     ])
     setProjects(p ?? [])
     setWorkplans(w ?? [])
     setTasks(t ?? [])
+
+    // Populate settings fields
+    const map: Record<string, string> = {}
+    for (const row of s ?? []) map[row.key] = row.value
+    setAppName(map['app_name'] ?? 'Road WorkPlan')
+    setOrgName(map['org_name'] ?? 'Engineer Co-ordinating Unit')
+    setSettingsLoaded(true)
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  // ── Helpers ───────────────────────────────────────────────
   const flash = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
@@ -121,9 +129,26 @@ export default function AdminPage() {
     return true
   }
 
-  // ══════════════════════════════════════════════════════════
-  // PROJECT HANDLERS
-  // ══════════════════════════════════════════════════════════
+  // ── Settings handlers ─────────────────────────────────────
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+
+    const [r1, r2] = await Promise.all([
+      updateSetting('app_name', appName.trim() || 'Road WorkPlan'),
+      updateSetting('org_name', orgName.trim() || 'Engineer Co-ordinating Unit'),
+    ])
+
+    setSaving(false)
+
+    if (r1.error || r2.error) {
+      flash(r1.error ?? r2.error ?? 'Failed to save', 'error')
+    } else {
+      flash('Settings saved! Refresh the page to see the new name in the sidebar.')
+    }
+  }
+
+  // ── Project handlers ──────────────────────────────────────
   const onCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
     const ok = await run(() => createProject({
@@ -153,9 +178,7 @@ export default function AdminPage() {
     if (ok) flash('Project deleted')
   }
 
-  // ══════════════════════════════════════════════════════════
-  // WORKPLAN HANDLERS
-  // ══════════════════════════════════════════════════════════
+  // ── Workplan handlers ─────────────────────────────────────
   const onCreateWorkplan = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!wForm.project_id) return flash('Select a project first', 'error')
@@ -184,9 +207,7 @@ export default function AdminPage() {
     if (ok) flash('Work plan deleted')
   }
 
-  // ══════════════════════════════════════════════════════════
-  // TASK HANDLERS
-  // ══════════════════════════════════════════════════════════
+  // ── Task handlers ─────────────────────────────────────────
   const onCreateTask = async (e: React.FormEvent) => {
     e.preventDefault()
     const ok = await run(() => createTask({
@@ -220,14 +241,12 @@ export default function AdminPage() {
   }
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'projects', label: `Projects (${projects.length})` },
+    { key: 'projects',  label: `Projects (${projects.length})` },
     { key: 'workplans', label: `Work Plans (${workplans.length})` },
-    { key: 'tasks', label: `Tasks (${tasks.length})` },
+    { key: 'tasks',     label: `Tasks (${tasks.length})` },
+    { key: 'settings',  label: 'Settings' },
   ]
 
-  // ══════════════════════════════════════════════════════════
-  // RENDER
-  // ══════════════════════════════════════════════════════════
   return (
     <div className="space-y-6">
       {toast && <Toast msg={toast.msg} type={toast.type} />}
@@ -238,7 +257,7 @@ export default function AdminPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit flex-wrap">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -249,11 +268,82 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* ═══════════ PROJECTS ═══════════ */}
+      {/* ═══════════ SETTINGS TAB ═══════════ */}
+      {tab === 'settings' && (
+        <div className="max-w-lg">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <h2 className="text-sm font-semibold text-gray-900 mb-1">App Settings</h2>
+            <p className="text-xs text-gray-400 mb-5">
+              Changes take effect immediately. The sidebar and browser tab will update on the next page load.
+            </p>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div>
+                <label className={lbl}>App name</label>
+                <input
+                  required
+                  className={inp}
+                  value={appName}
+                  onChange={e => setAppName(e.target.value)}
+                  placeholder="Road WorkPlan"
+                  maxLength={60}
+                  disabled={!settingsLoaded}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Shown in the sidebar header and browser tab.
+                </p>
+              </div>
+
+              <div>
+                <label className={lbl}>Organisation name</label>
+                <input
+                  required
+                  className={inp}
+                  value={orgName}
+                  onChange={e => setOrgName(e.target.value)}
+                  placeholder="Engineer Co-ordinating Unit"
+                  maxLength={80}
+                  disabled={!settingsLoaded}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Shown below the app name in the sidebar.
+                </p>
+              </div>
+
+              {/* Live preview */}
+              <div className="rounded-lg bg-slate-900 p-4 mt-2">
+                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Preview</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">
+                      {appName || 'Road WorkPlan'}
+                    </p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {orgName || 'Engineer Co-ordinating Unit'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                disabled={saving || !settingsLoaded}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving...' : 'Save settings'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ PROJECTS TAB ═══════════ */}
       {tab === 'projects' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-
-          {/* Create form */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
             <h2 className="text-sm font-semibold text-gray-900 mb-4">New Project</h2>
             <form onSubmit={onCreateProject} className="space-y-3">
@@ -300,14 +390,13 @@ export default function AdminPage() {
             </form>
           </div>
 
-          {/* List */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-gray-50">
               <h2 className="text-sm font-semibold text-gray-900">All Projects</h2>
             </div>
             <div className="overflow-y-auto flex-1 divide-y divide-gray-50" style={{ maxHeight: 480 }}>
               {projects.length === 0
-                ? <p className="text-sm text-gray-400 text-center py-12">No projects yet. Create one →</p>
+                ? <p className="text-sm text-gray-400 text-center py-12">No projects yet. Create one.</p>
                 : projects.map(p => (
                   <div key={p.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60">
                     <div className="flex-1 min-w-0">
@@ -324,7 +413,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ═══════════ WORK PLANS ═══════════ */}
+      {/* ═══════════ WORK PLANS TAB ═══════════ */}
       {tab === 'workplans' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -389,7 +478,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ═══════════ TASKS ═══════════ */}
+      {/* ═══════════ TASKS TAB ═══════════ */}
       {tab === 'tasks' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -467,7 +556,6 @@ export default function AdminPage() {
                         <p className="text-xs text-gray-400 mt-0.5">{t.project?.name ?? 'No project'}</p>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {/* Inline status toggle */}
                         <select value={t.status}
                           onChange={async e => {
                             await updateTaskStatus(t.id, e.target.value as TaskStatus)
@@ -493,7 +581,6 @@ export default function AdminPage() {
 
       {/* ═══════════ EDIT MODALS ═══════════ */}
 
-      {/* Edit Project */}
       <Modal open={!!editProject} onClose={() => setEditProject(null)} title="Edit Project">
         {editProject && (
           <form onSubmit={onUpdateProject} className="space-y-3">
@@ -539,7 +626,6 @@ export default function AdminPage() {
         )}
       </Modal>
 
-      {/* Edit Work Plan */}
       <Modal open={!!editWorkplan} onClose={() => setEditWorkplan(null)} title="Edit Work Plan">
         {editWorkplan && (
           <form onSubmit={onUpdateWorkplan} className="space-y-3">
@@ -578,7 +664,6 @@ export default function AdminPage() {
         )}
       </Modal>
 
-      {/* Edit Task */}
       <Modal open={!!editTask} onClose={() => setEditTask(null)} title="Edit Task" size="lg">
         {editTask && (
           <form onSubmit={onUpdateTask} className="space-y-3">
