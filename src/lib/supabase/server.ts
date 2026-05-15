@@ -18,12 +18,11 @@
 // ==========================================================
 
 import { createServerClient } from '@supabase/ssr'
+import type { CookieMethodsServer } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
   const cookieStore = await cookies()
-  // "await cookies()" gets the cookie jar for this request.
-  // We pass it to Supabase so it can read/write the auth session.
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,17 +31,14 @@ export async function createClient() {
       cookies: {
         getAll() {
           return cookieStore.getAll()
-          // Supabase calls this to READ the auth session cookie
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: Parameters<CookieMethodsServer['setAll']>[0]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
-              // Supabase calls this to WRITE/UPDATE the auth session cookie
             )
           } catch {
-            // If we're in a Server Component (not a Server Action),
-            // we can't write cookies. That's fine — reads still work.
+            // Server Component — cookie writes are expected to fail here
           }
         },
       },
